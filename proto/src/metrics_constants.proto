@@ -4574,5 +4574,8 @@ message MetricsEvent {
 
     // CustomSettings constant
     CUSTOM_SETTINGS = 1500;
+
+    // Settings -> Backup & Reset -> Feature Reset
+    FEATURE_PREFERENCES = 950;
   }
 }
