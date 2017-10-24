@@ -229,59 +229,6 @@ class GlobalActionsDialog implements DialogInterface.OnDismissListener, DialogIn
     }
 
     /**
-     * Since there are two ways of handling airplane mode (with telephony, we depend on the internal
-     * device telephony state), and MSIM devices do not report phone state for missing SIMs, we
-     * need to dynamically setup listeners based on subscription changes.
-     *
-     * So if there is _any_ active SIM in the device, we can depend on the phone state,
-     * otherwise fall back to {@link Settings.Global#AIRPLANE_MODE_ON}.
-     */
-    private void setupAirplaneModeListeners() {
-        TelephonyManager telephonyManager =
-                (TelephonyManager) mContext.getSystemService(Context.TELEPHONY_SERVICE);
-
-        for (PhoneStateListener listener : mPhoneStateListeners) {
-            telephonyManager.listen(listener, PhoneStateListener.LISTEN_NONE);
-        }
-        mPhoneStateListeners.clear();
-
-        final List<SubscriptionInfo> subInfoList = SubscriptionManager.from(mContext)
-                .getActiveSubscriptionInfoList();
-        if (subInfoList != null) {
-            mHasTelephony = true;
-            mAirplaneModeBits = new BitSet(subInfoList.size());
-            for (int i = 0; i < subInfoList.size(); i++) {
-                final int finalI = i;
-                PhoneStateListener subListener = new PhoneStateListener(subInfoList.get(finalI)
-                        .getSubscriptionId()) {
-                    @Override
-                    public void onServiceStateChanged(ServiceState serviceState) {
-                        final boolean inAirplaneMode = serviceState.getState()
-                                == ServiceState.STATE_POWER_OFF;
-                        mAirplaneModeBits.set(finalI, inAirplaneMode);
-
-                        // we're in airplane mode if _any_ of the subscriptions say we are
-                        mAirplaneState = mAirplaneModeBits.cardinality() > 0
-                                ? ToggleAction.State.On : ToggleAction.State.Off;
-
-                        mAirplaneModeOn.updateState(mAirplaneState);
-                        if (mAdapter != null) {
-                            mAdapter.notifyDataSetChanged();
-                        }
-                    }
-                };
-                mPhoneStateListeners.add(subListener);
-                telephonyManager.listen(subListener, PhoneStateListener.LISTEN_SERVICE_STATE);
-            }
-        } else {
-            mHasTelephony = false;
-        }
-
-        // Set the initial status of airplane mode toggle
-        mAirplaneState = getUpdatedAirplaneToggleState();
-    }
-
-    /**
      * Show the global actions dialog (creating if necessary)
      * @param keyguardShowing True if keyguard is showing
      */
@@ -387,9 +334,13 @@ class GlobalActionsDialog implements DialogInterface.OnDismissListener, DialogIn
         mRestartAdvancedAction = new ToggleRestartAdvancedAction(
                 com.android.systemui.R.drawable.ic_restart_advanced,
                 com.android.systemui.R.drawable.ic_restart_advanced,
+                com.android.systemui.R.drawable.ic_restart_advanced,
+                com.android.systemui.R.drawable.ic_restart_advanced,
                 com.android.systemui.R.string.global_action_restart_advanced,
                 com.android.systemui.R.string.global_action_restart_recovery,
                 com.android.systemui.R.string.global_action_restart_bootloader,
+                com.android.systemui.R.string.global_action_restart_soft,
+                com.android.systemui.R.string.global_action_restart_systemui,
                 mWindowManagerFuncs, mHandler) {
 
             public boolean showDuringKeyguard() {
@@ -1142,31 +1093,45 @@ class GlobalActionsDialog implements DialogInterface.OnDismissListener, DialogIn
 
         enum State {
             Recovery,
-            Bootloader;
+            Bootloader,
+            SoftReboot,
+            SystemUI;
         }
 
         protected State mState = State.Recovery;
 
         protected int mRecoveryIconResid;
         protected int mBootloaderIconResid;
+        protected int mSoftRebootIconResid;
+        protected int mSystemUIIconResid;
         protected int mMessageResId;
         protected int mRecoveryMessageResId;
         protected int mBootloaderMessageResId;
+        protected int mSoftRebootMessageResId;
+        protected int mSystemUIMessageResId;
         protected GlobalActionsManager mWmFuncs;
         protected Handler mRefresh;
 
         public ToggleRestartAdvancedAction(int recoveryIconResid,
                 int bootloaderIconResid,
+                int softRebootIconResid,
+                int systemuiIconResid,
                 int message,
                 int recoveryMessageResId,
                 int bootloaderMessageResId,
+                int softRebootMessageResId,
+                int systemuiMessageResId,
                 GlobalActionsManager funcs,
                 Handler handler) {
             mRecoveryIconResid = recoveryIconResid;
             mBootloaderIconResid = bootloaderIconResid;
+            mSoftRebootIconResid = softRebootIconResid;
+            mSystemUIIconResid = systemuiIconResid;
             mMessageResId = message;
             mRecoveryMessageResId = recoveryMessageResId;
             mBootloaderMessageResId = bootloaderMessageResId;
+            mSoftRebootMessageResId = softRebootMessageResId;
+            mSystemUIMessageResId = systemuiMessageResId;
             mWmFuncs = funcs;
             mRefresh = handler;
         }
@@ -1192,18 +1157,55 @@ class GlobalActionsDialog implements DialogInterface.OnDismissListener, DialogIn
                 messageView.setText(mMessageResId);
             }
 
-            boolean bootloader = (mState == State.Bootloader);
-            if (icon != null) {
-                icon.setImageDrawable(context.getDrawable(
-                        (bootloader ? mBootloaderIconResid : mRecoveryIconResid)));
+            switch (mState) {
+            case Recovery:
+                 if (icon != null) {
+                     icon.setImageDrawable(context.getDrawable(mRecoveryIconResid));
+                 }
+                 if (statusView != null) {
+                     statusView.setText(mRecoveryMessageResId);
+                     statusView.setVisibility(View.VISIBLE);
+                 }
+                 break;
+            case Bootloader:
+                 if (icon != null) {
+                     icon.setImageDrawable(context.getDrawable(mBootloaderIconResid));
+                 }
+                 if (statusView != null) {
+                     statusView.setText(mBootloaderMessageResId);
+                     statusView.setVisibility(View.VISIBLE);
+                 }
+                 break;
+            case SoftReboot:
+                 if (icon != null) {
+                     icon.setImageDrawable(context.getDrawable(mSoftRebootIconResid));
+                 }
+                 if (statusView != null) {
+                     statusView.setText(mSoftRebootMessageResId);
+                     statusView.setVisibility(View.VISIBLE);
+                 }
+                 break;
+            case SystemUI:
+                 if (icon != null) {
+                     icon.setImageDrawable(context.getDrawable(mSystemUIIconResid));
+                 }
+                 if (statusView != null) {
+                     statusView.setText(mSystemUIMessageResId);
+                     statusView.setVisibility(View.VISIBLE);
+                 }
+                 break;
+            default:
+                 if (icon != null) {
+                     icon.setImageDrawable(context.getDrawable(mRecoveryIconResid));
+                 }
+                 if (statusView != null) {
+                     statusView.setText(mRecoveryMessageResId);
+                     statusView.setVisibility(View.VISIBLE);
+                 }
+                 break;
             }
 
-            if (statusView != null) {
-                statusView.setText(bootloader ? mBootloaderMessageResId : mRecoveryMessageResId);
-                statusView.setVisibility(View.VISIBLE);
-            }
-
-            return v;
+                 return v;
         }
 
         public void onClick(View v) {
@@ -1211,19 +1213,45 @@ class GlobalActionsDialog implements DialogInterface.OnDismissListener, DialogIn
         }
 
         public final void onPress() {
-            if (mState == State.Recovery) {
-                mState = State.Bootloader;
-            } else {
-                mState = State.Recovery;
+            switch (mState) {
+            case Recovery:
+                 mState = State.Bootloader;
+                 break;
+            case Bootloader:
+                 mState = State.SoftReboot;
+                 break;
+            case SoftReboot:
+                 mState = State.SystemUI;
+                 break;
+            case SystemUI:
+                 mState = State.Recovery;
+                 break;
+            default:
+                 mState = State.Recovery;
+                 break;
             }
+
             mRefresh.sendEmptyMessage(MESSAGE_REFRESH_ADVANCED_REBOOT);
         }
 
         public boolean onLongClick (View v) {
             mRefresh.sendEmptyMessage(MESSAGE_DISMISS);
             boolean bootloader = (mState == State.Bootloader);
-            mWmFuncs.advancedReboot(bootloader ? PowerManager.REBOOT_BOOTLOADER
-                    : PowerManager.REBOOT_RECOVERY);
+            switch (mState) {
+            case Recovery:
+                 mWmFuncs.advancedReboot(PowerManager.REBOOT_RECOVERY);
+                 break;
+            case Bootloader:
+                 mWmFuncs.advancedReboot(PowerManager.REBOOT_BOOTLOADER);
+                 break;
+            case SoftReboot:
+                 mWmFuncs.advancedReboot(PowerManager.REBOOT_SOFT);
+                 break;
+            case SystemUI:
+                 mWmFuncs.advancedReboot(PowerManager.REBOOT_SYSTEMUI);
+                 break;
+            }
+
             return true;
         }
 
