@@ -124,10 +124,11 @@ oneway interface IStatusBar
     void clickQsTile(in ComponentName tile);
     void handleSystemKey(in int key);
 
-    void showShutdownUi(boolean isReboot, String reason);
-
     /**
      * Custom
      */
     void toggleCameraFlash();
+
+    void showShutdownUi(boolean isReboot, boolean isRebootBootloader,
+                boolean isRebootRecovery, String reason);
 }
