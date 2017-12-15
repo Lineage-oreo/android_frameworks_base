@@ -7130,6 +7130,23 @@ public final class Settings {
                 "managed_profile_contact_remote_search";
 
         /**
+         * Whether the extended restart menu is available to the user.
+         *
+         * @hide
+         */
+        public static final String EXTENDED_RESTART =
+                "extended_restart";
+
+        /**
+         * Settings to reset on user request. They will fall back to their default value (0).
+         *
+         * @hide
+         */
+        public static final String[] SETTINGS_TO_RESET = {
+            EXTENDED_RESTART
+        };
+
+        /**
          * Whether or not the automatic storage manager is enabled and should run on the device.
          *
          * @hide
